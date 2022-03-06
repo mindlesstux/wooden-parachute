@@ -5,5 +5,5 @@ try:
     response = c.request('172.16.0.52', version=3)
 except ntplib.NTPException:
     response = False
-print(response)
+print("%s" % response)
 
