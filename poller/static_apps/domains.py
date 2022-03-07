@@ -1,5 +1,4 @@
 from dotenv import load_dotenv
-
 import logging
 import mysql.connector as database
 import os
@@ -15,37 +14,98 @@ mariadb_database=os.environ.get("mariadb_database")
 logging.basicConfig(filename='staticapp_domains.log', level=logging.DEBUG, format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %H:%M:%S')
 
 # Create connection to the database
-db_connection = database.connect(user=mariadb_username, password=mariadb_password, host=mariadb_hostname, database=mariadb_database)
-cursor = db_connection.cursor()
+try:
+   db_connection = database.connect(user=mariadb_username, password=mariadb_password, host=mariadb_hostname, database=mariadb_database)
+except Error as e:
+   logging.error(e)
 
 # Select only the domains that have not been updated in the past 3hr
+
 statement = "SELECT * FROM staticapp_domains WHERE last_check <= (NOW() - INTERVAL 3 HOUR)"
-logging.debug(statement)
+cursor = db_connection.cursor()
 cursor.execute(statement)
 
+update_sql = []
+check_sql = []
+
 for (domain_id, content_id, domain_name, registrar, date_created, date_updated, date_expire, nameservers, status, dnssec, last_check, last_update) in cursor:
-   whodata = whois.whois('mindlesstux.com')
+   whodata = whois.whois(domain_name)
    to_update = {}
    print(whodata)
 
-   # Registrar check
+   # Registrar
    polled_registrar = whodata['registrar']
-   if registrar is not polled_registrar:
-      to_update['registrar'] = polled_registrar
+   if registrar != polled_registrar:
+      to_update['registrar'] = "'%s'" % (polled_registrar)
 
    # TODO: Date Created
    # TODO: Date Updated
    # TODO: Date Expire
 
-   # TODO: Nameservers
+   # Nameservers
+   if type(whodata['status']) is list:
+      polled_nameservers = sorted(list(set([x.lower() for x in whodata['name_servers']])))
+      polled_nameservers = ', '.join(polled_nameservers)
+   else:
+      polled_nameservers = whodata['name_servers']
 
-   # TODO: Status
+   if nameservers != polled_nameservers:
+      to_update['nameservers'] = "'%s'" % (polled_nameservers)
 
-   # TODO: DNSSEC
+   # Status
+   if type(whodata['status']) is list:
+      polled_status = sorted(list(set([x.lower() for x in whodata['status']])))
+      tmpsplit = []
+      for x in polled_status:
+         tmp = x.split(' ')
+         tmpsplit.append(tmp[0])
+      polled_status = tmpsplit
+      del tmpsplit
+      polled_status = ', '.join(polled_status)
+   else:
+      polled_status = whodata['status']
 
+   if status != polled_status:
+      to_update['status'] = "'%s'" % (polled_status)
 
+   # DNSSEC
+   if type(whodata['dnssec']) is list:
+      polled_dnssec = sorted(list(set([x.lower() for x in whodata['dnssec']])))
+      polled_dnssec = ', '.join(polled_dnssec)
+   else:
+      polled_dnssec = whodata['dnssec']
 
-# Close down connections
+   if dnssec != polled_dnssec:
+      to_update['dnssec'] = "'%s'" % (polled_dnssec)
+
+   # Generate the SQL to update the row with the new data
+   if to_update:
+      print(to_update)
+      sql = "UPDATE staticapp_domains SET "
+      for item in to_update.items():
+         sql += "%s = %s, " % (item[0], item[1])
+      sql += "last_update = NOW() "
+      sql += "WHERE domain_id = %s" % (domain_id)
+      print(sql)
+      update_sql.append(sql)
+   
+   sql = "UPDATE staticapp_domains SET last_check = NOW() WHERE domain_id = %s" % (domain_id)
+   check_sql.append(sql)
+
 cursor.close()
+del cursor
+
+if update_sql is not []:
+   for sql in update_sql:
+      db_connection.cmd_query(sql)
+      db_connection.commit()
+
+if check_sql is not []:
+   for sql in check_sql:
+      db_connection.cmd_query(sql)
+      db_connection.commit()
+
+
+# Close down connection
 db_connection.close()
 
