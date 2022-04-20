@@ -14,13 +14,15 @@ curl_url = 'https://google.com/'
 curl_verify_ssl = False
 
 curl_dns_doh = None
-#curl_dns_doh = "https://cloudflare-dns.com/dns-query"
+curl_dns_doh = "https://cloudflare-dns.com/dns-query"
 #curl_dns_doh = "https://doh.mindlesstux.com/dns-query"
 curl_doh_verifystatus = False
 
-curl_dns_server = "10.99.0.3"
+curl_dns_server = "1.1.1.2,1.0.0.2"
 
-curl_ipver = 'both'
+# 0 = both, 4 = ipv4, 6 = ipv6
+curl_ipver = 8
+
 curl_referer = None
 
 curl_ssl_verifyhost = False
@@ -46,12 +48,20 @@ if curl_dns_doh is not None:
 #    c.setopt(c.DOH_SSL_VERIFYSTATUS, curl_doh_verifystatus)
 
 # None or csv list of ips
-if curl_dns_server is not None:
-    c.setopt(c.DNS_SERVERS, curl_dns_server)
+#if curl_dns_server is not None:
+#    c.setopt(c.DNS_SERVERS, curl_dns_server)
 
 c.setopt(c.SSL_VERIFYHOST, curl_ssl_verifyhost)
 c.setopt(pycurl.OPT_CERTINFO, False)
 c.setopt(c.OPT_FILETIME, True)
+
+if curl_ipver == 4:
+    c.setopt(pycurl.IPRESOLVE, pycurl.IPRESOLVE_V4)
+elif curl_ipver == 6:
+    c.setopt(pycurl.IPRESOLVE, pycurl.IPRESOLVE_V6)
+else:
+    c.setopt(pycurl.IPRESOLVE, pycurl.IPRESOLVE_WHATEVER)
+    a="Doh, how did we get here"
 
 
 c.setopt(c.WRITEDATA, buffer)
